@@ -13,6 +13,14 @@ const users = new Map<WebSocket, string>();
 // Store timers for messages
 const messageTimers = new Map<string, NodeJS.Timeout>();
 
+// Message storage
+type Message = {
+  id: string;
+  socket: WebSocket;
+};
+
+const messages = new Map<string, Message>();
+
 wss.on("connection", (socket: WebSocket) => {
   console.log("New connection");
 
@@ -26,6 +34,8 @@ wss.on("connection", (socket: WebSocket) => {
     }
 
     if (msg.type === "MESSAGE") {
+      if (!users.has(socket)) return;
+
       const name = users.get(socket) || "Anonymous";
       const id = randomUUID();
       const expiresIn = 60;
@@ -38,11 +48,13 @@ wss.on("connection", (socket: WebSocket) => {
         expiresIn
       };
 
+      // save ownership
+      messages.set(id, { id, socket });
+
       broadcastJSON(payload);
 
       const timer = setTimeout(() => {
-        broadcastJSON({ type: "DELETE", id });
-        messageTimers.delete(id);
+        deleteMessage(id);
       }, expiresIn * 1000);
 
       messageTimers.set(id, timer);
@@ -53,8 +65,37 @@ wss.on("connection", (socket: WebSocket) => {
     const name = users.get(socket);
     if (name) broadcast(`${name} left the room`);
     users.delete(socket);
+
+    // delete all messages from this socket
+    for (const [id, msg] of messages) {
+      if (msg.socket === socket) {
+        deleteMessage(id);
+      }
+    }
+
+    // if room empty, delete everything
+    if (users.size === 0) {
+      for (const id of messages.keys()) {
+        deleteMessage(id);
+      }
+    }
   });
 });
+
+// central delete
+function deleteMessage(id: string) {
+  if (!messages.has(id)) return;
+
+  messages.delete(id);
+
+  const timer = messageTimers.get(id);
+  if (timer) {
+    clearTimeout(timer);
+    messageTimers.delete(id);
+  }
+
+  broadcastJSON({ type: "DELETE", id });
+}
 
 function broadcast(text: string) {
   for (const client of users.keys()) {
