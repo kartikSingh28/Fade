@@ -1,19 +1,38 @@
+import "dotenv/config";
+import Redis from "ioredis";
 import { randomUUID } from "crypto";
 import express from "express";
 import http from "http";
 import { WebSocket, WebSocketServer } from "ws";
 
+if (!process.env.REDIS_URL) {
+  throw new Error("REDIS_URL is missing.");
+}
+
+const redis = new Redis(process.env.REDIS_URL);
+const redisSub = new Redis(process.env.REDIS_URL);
+
+redis.ping().then(() => console.log("Redis connected"));
+
+// Enable expiry events
+redis.config("SET", "notify-keyspace-events", "Ex");
+redisSub.psubscribe("__keyevent@*__:expired");
+
+redisSub.on("pmessage", (_p, _c, key) => {
+  if (key.startsWith("message:")) {
+    const id = key.replace("message:", "");
+    messages.delete(id);
+    broadcastJSON({ type: "DELETE", id });
+  }
+});
+
+// Server Setup 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Store nickname per socket
 const users = new Map<WebSocket, string>();
 
-// Store timers for messages
-const messageTimers = new Map<string, NodeJS.Timeout>();
-
-// Message storage
 type Message = {
   id: string;
   socket: WebSocket;
@@ -21,10 +40,11 @@ type Message = {
 
 const messages = new Map<string, Message>();
 
+//  WebSocket Logic 
 wss.on("connection", (socket: WebSocket) => {
   console.log("New connection");
 
-  socket.on("message", (data: Buffer) => {
+  socket.on("message", async (data: Buffer) => {
     const msg = JSON.parse(data.toString());
 
     if (msg.type === "JOIN") {
@@ -45,19 +65,24 @@ wss.on("connection", (socket: WebSocket) => {
         id,
         from: name,
         text: msg.text,
-        expiresIn
+        expiresIn,
       };
 
-      // save ownership
+      // Save in Redis with TTL
+      await redis.set(
+        `message:${id}`,
+        JSON.stringify({
+          id,
+          from: name,
+          text: msg.text,
+          createdAt: Date.now(),
+        }),
+        "EX",
+        expiresIn
+      );
+
       messages.set(id, { id, socket });
-
       broadcastJSON(payload);
-
-      const timer = setTimeout(() => {
-        deleteMessage(id);
-      }, expiresIn * 1000);
-
-      messageTimers.set(id, timer);
     }
   });
 
@@ -66,14 +91,14 @@ wss.on("connection", (socket: WebSocket) => {
     if (name) broadcast(`${name} left the room`);
     users.delete(socket);
 
-    // delete all messages from this socket
+    
     for (const [id, msg] of messages) {
       if (msg.socket === socket) {
         deleteMessage(id);
       }
     }
 
-    // if room empty, delete everything
+    // If room empty delete all
     if (users.size === 0) {
       for (const id of messages.keys()) {
         deleteMessage(id);
@@ -82,18 +107,10 @@ wss.on("connection", (socket: WebSocket) => {
   });
 });
 
-// central delete
 function deleteMessage(id: string) {
   if (!messages.has(id)) return;
-
   messages.delete(id);
-
-  const timer = messageTimers.get(id);
-  if (timer) {
-    clearTimeout(timer);
-    messageTimers.delete(id);
-  }
-
+  redis.del(`message:${id}`);
   broadcastJSON({ type: "DELETE", id });
 }
 
@@ -114,6 +131,7 @@ function broadcastJSON(obj: any) {
   }
 }
 
+// Start Server
 server.listen(5050, () => {
   console.log("Server running on http://localhost:5050");
 });
