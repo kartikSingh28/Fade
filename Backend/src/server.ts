@@ -15,26 +15,30 @@ const redisSub = new Redis(process.env.REDIS_URL);
 
 redis.ping().then(() => console.log("Redis connected"));
 
-// Enable expiry events
+// expiry events
 redis.config("SET", "notify-keyspace-events", "Ex");
 redisSub.psubscribe("__keyevent@*__:expired");
 
-// When Redis expires a message, notify clients
+// When Redis expires a message, notify only that room
 redisSub.on("pmessage", (_p, _c, key) => {
-  if (key.startsWith("message:")) {
-    const id = key.replace("message:", "");
-    broadcastJSON({ type: "DELETE", id });
+  if (key.startsWith("room:")) {
+    const parts = key.split(":"); // room:ROOMID:message:ID
+    const room = parts[1];
+    const id = parts[3];
+    broadcastJSONToRoom(room, { type: "DELETE", id });
   }
 });
+
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Only users kept in memory
+// Inmemory user + room
 const users = new Map<WebSocket, string>();
+const userRooms = new Map<WebSocket, string>();
 
-// WebSocket logic
+// WebSocket 
 wss.on("connection", (socket: WebSocket) => {
   console.log("New connection");
 
@@ -47,15 +51,23 @@ wss.on("connection", (socket: WebSocket) => {
     }
 
     if (msg.type === "JOIN") {
-      users.set(socket, msg.name);
-      broadcast(`${msg.name} joined the room`);
+      const room = msg.room;
+      const name = msg.name;
+
+      users.set(socket, name);
+      userRooms.set(socket, room);
+
+      broadcastToRoom(room, `${name} joined room ${room}`);
       return;
     }
 
     if (msg.type === "MESSAGE") {
       if (!users.has(socket)) return;
 
-      const name = users.get(socket) || "Anonymous";
+      const name = users.get(socket)!;
+      const room = userRooms.get(socket);
+      if (!room) return;
+
       const id = randomUUID();
       const expiresIn = 60;
 
@@ -65,59 +77,76 @@ wss.on("connection", (socket: WebSocket) => {
         from: name,
         text: msg.text,
         expiresIn,
+        room
       };
 
-      // Save only in Redis
+      // Save in Redis per room
       await redis.set(
-        `message:${id}`,
+        `room:${room}:message:${id}`,
         JSON.stringify({
           id,
           from: name,
           text: msg.text,
-          createdAt: Date.now(),
+          createdAt: Date.now()
         }),
         "EX",
         expiresIn
       );
 
-      broadcastJSON(payload);
+      broadcastJSONToRoom(room, payload);
     }
   });
 
   socket.on("close", async () => {
     const name = users.get(socket);
-    if (name) broadcast(`${name} left the room`);
-    users.delete(socket);
+    const room = userRooms.get(socket);
 
-  
-    if (users.size === 0) {
-      const keys = await redis.keys("message:*");
-      for (const key of keys) {
-        await redis.del(key);
+    if (name && room) {
+      broadcastToRoom(room, `${name} left room ${room}`);
+    }
+
+    users.delete(socket);
+    userRooms.delete(socket);
+
+    if (room) {
+      let stillInRoom = false;
+      for (const r of userRooms.values()) {
+        if (r === room) {
+          stillInRoom = true;
+          break;
+        }
+      }
+
+      // If room empty delete all its messages
+      if (!stillInRoom) {
+        const keys = await redis.keys(`room:${room}:message:*`);
+        for (const key of keys) {
+          await redis.del(key);
+        }
+        console.log(`Room ${room} empty, cleaned Redis`);
       }
     }
   });
 });
 
-
-function broadcast(text: string) {
-  for (const client of users.keys()) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(text);
+// Helpers
+function broadcastToRoom(roomId: string, text: string) {
+  for (const [sock, r] of userRooms) {
+    if (r === roomId && sock.readyState === WebSocket.OPEN) {
+      sock.send(text);
     }
   }
 }
 
-function broadcastJSON(obj: any) {
+function broadcastJSONToRoom(roomId: string, obj: any) {
   const data = JSON.stringify(obj);
-  for (const client of users.keys()) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(data);
+  for (const [sock, r] of userRooms) {
+    if (r === roomId && sock.readyState === WebSocket.OPEN) {
+      sock.send(data);
     }
   }
 }
 
-// Start server
-server.listen(5050, () => {
+server.listen(8000, () => {
   console.log("Server running on http://localhost:5050");
 });
