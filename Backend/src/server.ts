@@ -9,6 +9,7 @@ if (!process.env.REDIS_URL) {
   throw new Error("REDIS_URL is missing.");
 }
 
+// Redis connections
 const redis = new Redis(process.env.REDIS_URL);
 const redisSub = new Redis(process.env.REDIS_URL);
 
@@ -18,34 +19,32 @@ redis.ping().then(() => console.log("Redis connected"));
 redis.config("SET", "notify-keyspace-events", "Ex");
 redisSub.psubscribe("__keyevent@*__:expired");
 
+// When Redis expires a message, notify clients
 redisSub.on("pmessage", (_p, _c, key) => {
   if (key.startsWith("message:")) {
     const id = key.replace("message:", "");
-    messages.delete(id);
     broadcastJSON({ type: "DELETE", id });
   }
 });
 
-// Server Setup 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
+// Only users kept in memory
 const users = new Map<WebSocket, string>();
 
-type Message = {
-  id: string;
-  socket: WebSocket;
-};
-
-const messages = new Map<string, Message>();
-
-//  WebSocket Logic 
+// WebSocket logic
 wss.on("connection", (socket: WebSocket) => {
   console.log("New connection");
 
   socket.on("message", async (data: Buffer) => {
-    const msg = JSON.parse(data.toString());
+    let msg;
+    try {
+      msg = JSON.parse(data.toString());
+    } catch {
+      return;
+    }
 
     if (msg.type === "JOIN") {
       users.set(socket, msg.name);
@@ -68,7 +67,7 @@ wss.on("connection", (socket: WebSocket) => {
         expiresIn,
       };
 
-      // Save in Redis with TTL
+      // Save only in Redis
       await redis.set(
         `message:${id}`,
         JSON.stringify({
@@ -81,38 +80,25 @@ wss.on("connection", (socket: WebSocket) => {
         expiresIn
       );
 
-      messages.set(id, { id, socket });
       broadcastJSON(payload);
     }
   });
 
-  socket.on("close", () => {
+  socket.on("close", async () => {
     const name = users.get(socket);
     if (name) broadcast(`${name} left the room`);
     users.delete(socket);
 
-    
-    for (const [id, msg] of messages) {
-      if (msg.socket === socket) {
-        deleteMessage(id);
-      }
-    }
-
-    // If room empty delete all
+  
     if (users.size === 0) {
-      for (const id of messages.keys()) {
-        deleteMessage(id);
+      const keys = await redis.keys("message:*");
+      for (const key of keys) {
+        await redis.del(key);
       }
     }
   });
 });
 
-function deleteMessage(id: string) {
-  if (!messages.has(id)) return;
-  messages.delete(id);
-  redis.del(`message:${id}`);
-  broadcastJSON({ type: "DELETE", id });
-}
 
 function broadcast(text: string) {
   for (const client of users.keys()) {
@@ -131,7 +117,7 @@ function broadcastJSON(obj: any) {
   }
 }
 
-// Start Server
+// Start server
 server.listen(5050, () => {
   console.log("Server running on http://localhost:5050");
 });
