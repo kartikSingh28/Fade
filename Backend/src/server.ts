@@ -1,5 +1,6 @@
 import "dotenv/config";
 import Redis from "ioredis";
+import {z} from "zod";
 import { randomUUID } from "crypto";
 import express from "express";
 import http from "http";
@@ -19,20 +20,36 @@ redis.ping().then(() => console.log("Redis connected"));
 redis.config("SET", "notify-keyspace-events", "Ex");
 redisSub.psubscribe("__keyevent@*__:expired");
 
-// When Redis expires a message, notify only that room
+// When Redis expires a message, notify only that rooM
 redisSub.on("pmessage", (_p, _c, key) => {
-  if (key.startsWith("room:")) {
-    const parts = key.split(":"); // room:ROOMID:message:ID
-    const room = parts[1];
-    const id = parts[3];
-    broadcastJSONToRoom(room, { type: "DELETE", id });
-  }
+  if (!key.startsWith("room:")) return;
+
+  const parts = key.split(":"); // room:ROOMID:message:ID
+
+  if (parts.length < 4) return;
+
+  const room = parts[1];
+  const id = parts[3];
+
+  broadcastJSONToRoom(room, { type: "DELETE", id });
 });
 
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
+const JoinSchema=z.object({
+  type:z.literal("JOIN"),
+  name:z.string().min(1).max(20),
+  room:z.string().min(1).max(50),
+});
+
+const MessageSchema=z.object({
+  type:z.literal("MESSAGE"),
+  text:z.string().min(1).max(500),
+});
+
+const ClientSchema=z.union([JoinSchema,MessageSchema])
 
 // Inmemory user + room
 const users = new Map<WebSocket, string>();
@@ -43,12 +60,28 @@ wss.on("connection", (socket: WebSocket) => {
   console.log("New connection");
 
   socket.on("message", async (data: Buffer) => {
-    let msg;
+    /*let msg;
     try {
       msg = JSON.parse(data.toString());
     } catch {
       return;
+    }*/// intial logc without validation
+
+    let raw:any;
+    try{
+      raw=JSON.parse(data.toString());
+    }catch{
+      sendError(socket,"Invalid JSON");
+      return;
     }
+
+    const parsed=ClientSchema.safeParse(raw)
+    if(!parsed.success){
+      sendError(socket,"Invalid format ");
+      return;
+    }
+
+    const msg=parsed.data;
 
     if (msg.type === "JOIN") {
       const room = msg.room;
@@ -147,6 +180,13 @@ function broadcastJSONToRoom(roomId: string, obj: any) {
   }
 }
 
+function sendError(socket: WebSocket, message: string) {
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "ERROR", message }));
+  }
+}
+
+
 server.listen(8000, () => {
-  console.log("Server running on http://localhost:5050");
+  console.log("Server running on http://localhost:8000");
 });
