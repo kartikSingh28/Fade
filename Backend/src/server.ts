@@ -49,7 +49,13 @@ const MessageSchema=z.object({
   text:z.string().min(1).max(500),
 });
 
-const ClientSchema=z.union([JoinSchema,MessageSchema])
+//RoOm schema
+const CreateRoomSchema=z.object({
+  type:z.literal("CREATE_ROOM"),
+  name:z.string().min(1).max(20),
+});
+
+const ClientSchema=z.union([JoinSchema,MessageSchema,CreateRoomSchema]);
 
 // Inmemory user + room
 const users = new Map<WebSocket, string>();
@@ -83,16 +89,49 @@ wss.on("connection", (socket: WebSocket) => {
 
     const msg=parsed.data;
 
-    if (msg.type === "JOIN") {
-      const room = msg.room;
-      const name = msg.name;
+    //for room
+    if (msg.type === "CREATE_ROOM") {
+  const name = msg.name;
+  const room = generateRoomCode();
 
-      users.set(socket, name);
-      userRooms.set(socket, room);
+  // store room meta in redis with TTL
+  await redis.set(
+    `room:${room}:meta`,
+    JSON.stringify({ owner: name, createdAt: Date.now() }),
+    "EX",
+    600 // 10 minutes
+  );
 
-      broadcastToRoom(room, `${name} joined room ${room}`);
-      return;
-    }
+  users.set(socket, name);
+  userRooms.set(socket, room);
+
+  socket.send(JSON.stringify({
+    type: "ROOM_CREATED",
+    room,
+  }));
+
+  return;
+}
+  if (msg.type === "JOIN") {
+  const room = msg.room;
+  const name = msg.name;
+
+  const exists = await redis.exists(`room:${room}:meta`);
+  if (!exists) {
+    sendError(socket, "Room not found");
+    return;
+  }
+
+  users.set(socket, name);
+  userRooms.set(socket, room);
+
+  // refresh room life
+  await redis.expire(`room:${room}:meta`, 600);
+
+  broadcastToRoom(room, `${name} joined room ${room}`);
+  return;
+}
+
 
     if (msg.type === "MESSAGE") {
       if (!users.has(socket)) return;
@@ -184,6 +223,11 @@ function sendError(socket: WebSocket, message: string) {
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: "ERROR", message }));
   }
+}
+
+//helper Room code
+function generateRoomCode() {
+  return Math.random().toString(36).substring(2,8).toUpperCase();
 }
 
 
