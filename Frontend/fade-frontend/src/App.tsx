@@ -1,99 +1,31 @@
-import { useEffect, useRef, useState } from "react";
+import { BrowserRouter, Routes, Route, useLocation, useParams } from "react-router-dom";
+import Entry from "./Entry";
+import Room from "./Room";
 
-type Msg =
-  | { type: "MESSAGE"; id: string; from: string; text: string }
-  | { type: "DELETE"; id: string }
-  | string;
+function RoomWrapper() {
+  const { roomId } = useParams();
+  const location = useLocation();
 
-export default function App() {
-  const [name, setName] = useState("");
-  const [joined, setJoined] = useState(false);
-  const [messages, setMessages] = useState<any[]>([]);
-  const ws = useRef<WebSocket | null>(null);
+  const name = (location.state as any)?.name;
 
-  useEffect(() => {
-    if (!joined) return;
-
-    ws.current = new WebSocket("ws://localhost:5050");
-
-    ws.current.onopen = () => {
-      ws.current?.send(JSON.stringify({ type: "JOIN", name }));
-    };
-
-    ws.current.onmessage = (e) => {
-      const data = e.data;
-      try {
-        const msg = JSON.parse(data);
-
-        if (msg.type === "MESSAGE") {
-          setMessages((prev) => [...prev, msg]);
-        }
-
-        if (msg.type === "DELETE") {
-          setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-        }
-      } catch {
-        setMessages((prev) => [...prev, { text: data, system: true }]);
-      }
-    };
-
-    return () => ws.current?.close();
-  }, [joined]);
-
-  if (!joined) {
+  if (!roomId || !name) {
     return (
-      <div style={{ padding: 20 }}>
-        <h2>Fade</h2>
-        <input
-          placeholder="Enter nickname"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <button onClick={() => setJoined(true)}>Join</button>
+      <div className="min-h-screen flex items-center justify-center bg-fade-bg text-fade-text">
+        Invalid room access
       </div>
     );
   }
 
-  return (
-    <div style={{ padding: 20 }}>
-      <h3>Fade Room</h3>
-      <div style={{ minHeight: 200 }}>
-        {messages.map((m, i) =>
-          m.system ? (
-            <div key={i}><i>{m.text}</i></div>
-          ) : (
-            <div key={m.id}>
-              <b>{m.from}:</b> {m.text}
-            </div>
-          )
-        )}
-      </div>
-
-      <ChatInput ws={ws} />
-    </div>
-  );
+  return <Room name={name} room={roomId} />;
 }
 
-function ChatInput({ ws }: { ws: any }) {
-  const [text, setText] = useState("");
-
+export default function App() {
   return (
-    <div>
-      <input
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Type..."
-      />
-      <button
-        onClick={() => {
-          ws.current?.send(
-            JSON.stringify({ type: "MESSAGE", text })
-          );
-          setText("");
-        }}
-      >
-        Send
-      </button>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Entry />} />
+        <Route path="/room/:roomId" element={<RoomWrapper />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
