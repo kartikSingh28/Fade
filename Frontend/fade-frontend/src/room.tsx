@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import Chat from "./Chat";
 
 type WsMessage =
   | { type: "MESSAGE"; id: string; from: string; text: string }
@@ -12,10 +13,21 @@ export default function Room({ name, room }: { name: string; room: string }) {
   const ws = useRef<WebSocket | null>(null);
   const [messages, setMessages] = useState<WsMessage[]>([]);
   const location = useLocation();
-  // 👇 room name source of truth
+
   const [roomTitle, setRoomTitle] = useState<string | null>(
     location.state?.roomName ?? null
   );
+  function sendMessage(text: string) {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+
+    ws.current.send(
+      JSON.stringify({
+        type: "MESSAGE",
+        text,
+      })
+    );
+  }
+
   useEffect(() => {
     ws.current = new WebSocket("ws://localhost:8000");
 
@@ -33,7 +45,6 @@ export default function Room({ name, room }: { name: string; room: string }) {
       try {
         const msg: WsMessage = JSON.parse(e.data);
 
-        // ✅ room meta (sent once on join)
         if (msg.type === "ROOM_META") {
           setRoomTitle(msg.roomName);
           return;
@@ -56,25 +67,22 @@ export default function Room({ name, room }: { name: string; room: string }) {
           return;
         }
       } catch {
-        // fallback for raw text system messages
         setMessages((prev) => [
           ...prev,
           { type: "SYSTEM", text: e.data },
         ]);
       }
     };
-
     return () => {
       ws.current?.close();
     };
   }, [name, room]);
-
   return (
     <div className="min-h-screen bg-fade-bg flex justify-center">
-      <div className="w-full max-w-2xl bg-fade-surface border border-fade-border rounded-xl p-6 shadow-soft mt-6">
+      <div className="w-full max-w-2xl bg-fade-surface border border-fade-border rounded-xl p-6 shadow-soft mt-6 flex flex-col h-[80vh]">
 
         {/* Header */}
-        <div className="border-b border-fade-border pb-4 mb-6">
+        <div className="border-b border-fade-border pb-4 mb-4">
           <h2 className="text-lg font-semibold text-fade-text tracking-wide">
             {roomTitle ?? "Fade Room"}
           </h2>
@@ -85,38 +93,8 @@ export default function Room({ name, room }: { name: string; room: string }) {
           </p>
         </div>
 
-        {/* Messages */}
-        <div className="space-y-2">
-          {messages.map((m: any, i: number) => {
-            if (m.type === "SYSTEM") {
-              return (
-                <div
-                  key={`system-${i}`}
-                  className="flex justify-center my-3"
-                >
-                  <div className="px-3 py-1 rounded-full text-xs text-fade-muted bg-fade-surface border border-fade-border">
-                    {m.text}
-                  </div>
-                </div>
-              );
-            }
-
-            if (m.type === "MESSAGE") {
-              return (
-                <div key={m.id} className="text-sm leading-relaxed">
-                  <span className="text-fade-accent font-medium">
-                    {m.from}
-                  </span>
-                  <span className="text-fade-text">
-                    : {m.text}
-                  </span>
-                </div>
-              );
-            }
-
-            return null;
-          })}
-        </div>
+        {/* Chat UI */}
+        <Chat messages={messages} onSend={sendMessage} />
       </div>
     </div>
   );
