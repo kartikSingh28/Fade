@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 export default function Entry() {
   const [name, setName] = useState("");
   const [roomCode, setRoomCode] = useState("");
+  const [roomName, setRoomName] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
   const navigate = useNavigate();
 
@@ -17,7 +18,9 @@ export default function Entry() {
       const msg = JSON.parse(e.data);
 
       if (msg.type === "ROOM_CREATED") {
-        navigate(`/room/${msg.room}`, { state: { name } });
+        navigate(`/room/${msg.room}`, {
+          state: { name, roomName: msg.roomName },
+        });
       }
 
       if (msg.type === "ERROR") {
@@ -34,6 +37,11 @@ export default function Entry() {
       return;
     }
 
+    if (!roomName.trim()) {
+      alert("Enter room name");
+      return;
+    }
+
     const ws = connectWS();
 
     ws.onopen = () => {
@@ -41,6 +49,7 @@ export default function Entry() {
         JSON.stringify({
           type: "CREATE_ROOM",
           name,
+          roomName,
         })
       );
     };
@@ -87,6 +96,16 @@ export default function Entry() {
             placeholder="Your name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            className="w-full bg-transparent border border-fade-border rounded-md px-3 py-2 text-fade-text placeholder-fade-hint focus:outline-none focus:border-fade-accent"
+          />
+        </div>
+
+        {/* Room name (create only) */}
+        <div className="mt-3">
+          <input
+            placeholder="Room name"
+            value={roomName}
+            onChange={(e) => setRoomName(e.target.value)}
             className="w-full bg-transparent border border-fade-border rounded-md px-3 py-2 text-fade-text placeholder-fade-hint focus:outline-none focus:border-fade-accent"
           />
         </div>
