@@ -1,5 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
+import Particles, { initParticlesEngine } from "@tsparticles/react";
+import { loadSlim } from "@tsparticles/slim";
+import type { ISourceOptions } from "@tsparticles/engine";
+
+import logo from "./assets/logo.png";
 
 export default function Entry() {
   const [name, setName] = useState("");
@@ -8,142 +14,118 @@ export default function Entry() {
   const wsRef = useRef<WebSocket | null>(null);
   const navigate = useNavigate();
 
+  // ✅ REQUIRED INIT (THIS WAS MISSING)
+  useEffect(() => {
+    initParticlesEngine(async (engine) => {
+      await loadSlim(engine);
+    });
+  }, []);
+
+  const particlesOptions: ISourceOptions = {
+    background: { color: "transparent" },
+    fpsLimit: 60,
+    particles: {
+      number: {
+        value: 120,
+        density: { enable: true, area: 900 },
+      },
+      color: { value: "#ffffff" },
+      opacity: { value: 0.25 },
+      size: { value: { min: 1, max: 2 } },
+      move: {
+        enable: true,
+        speed: 0.4,
+        outModes: { default: "out" },
+      },
+    },
+    detectRetina: true,
+  };
+
   function connectWS() {
     if (wsRef.current) return wsRef.current;
-
     const ws = new WebSocket("ws://localhost:8000");
     wsRef.current = ws;
 
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
-
       if (msg.type === "ROOM_CREATED") {
         navigate(`/room/${msg.room}`, {
           state: { name, roomName: msg.roomName },
         });
       }
-
-      if (msg.type === "ERROR") {
-        alert(msg.message);
-      }
     };
-
     return ws;
   }
 
   function handleCreateRoom() {
-    if (!name.trim()) {
-      alert("Enter your name");
-      return;
-    }
-
-    if (!roomName.trim()) {
-      alert("Enter room name");
-      return;
-    }
-
+    if (!name || !roomName) return;
     const ws = connectWS();
-
-    ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          type: "CREATE_ROOM",
-          name,
-          roomName,
-        })
-      );
-    };
+    ws.onopen = () =>
+      ws.send(JSON.stringify({ type: "CREATE_ROOM", name, roomName }));
   }
 
   function handleJoinRoom() {
-    if (!name.trim() || !roomCode.trim()) {
-      alert("Enter name and room code");
-      return;
-    }
-
+    if (!name || !roomCode) return;
     const ws = connectWS();
-
     ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          type: "JOIN",
-          name,
-          room: roomCode.toUpperCase(),
-        })
-      );
-
-      navigate(`/room/${roomCode.toUpperCase()}`, {
-        state: { name },
-      });
+      ws.send(JSON.stringify({ type: "JOIN", name, room: roomCode }));
+      navigate(`/room/${roomCode}`, { state: { name } });
     };
   }
 
   return (
-    <div className="min-h-screen bg-fade-bg flex items-center justify-center">
-      <div className="w-full max-w-sm bg-fade-surface border border-fade-border rounded-xl p-8 shadow-soft">
+    <div className="relative min-h-screen bg-black overflow-hidden flex items-center justify-center">
+      {/* PARTICLES */}
+      <Particles className="absolute inset-0 z-0" options={particlesOptions} />
 
-        {/* Title */}
-        <h1 className="text-2xl font-semibold text-fade-text text-center">
-          Fade
-        </h1>
-        <p className="text-sm text-fade-muted text-center mt-1">
-          ephemeral rooms
+      {/* LOGO GLOW */}
+      <img
+        src={logo}
+        className="absolute inset-0 m-auto w-[520px] opacity-[0.08] pointer-events-none"
+        style={{ filter: "drop-shadow(0 0 120px rgba(255,255,255,0.25))" }}
+      />
+
+      {/* CARD */}
+      <div className="relative z-10 w-full max-w-sm bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-8">
+        <h1 className="text-3xl text-white text-center mb-2">Fade</h1>
+        <p className="text-sm text-white/60 text-center mb-6">
+          Say what matters. Let the rest fade.
         </p>
 
-        {/* Name */}
-        <div className="mt-8">
-          <input
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full bg-transparent border border-fade-border rounded-md px-3 py-2 text-fade-text placeholder-fade-hint focus:outline-none focus:border-fade-accent"
-          />
-        </div>
+        <input
+          placeholder="Your name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full mb-3 bg-transparent border border-white/20 rounded-md px-3 py-2 text-white"
+        />
 
-        {/* Room name (create only) */}
-        <div className="mt-3">
-          <input
-            placeholder="Room name"
-            value={roomName}
-            onChange={(e) => setRoomName(e.target.value)}
-            className="w-full bg-transparent border border-fade-border rounded-md px-3 py-2 text-fade-text placeholder-fade-hint focus:outline-none focus:border-fade-accent"
-          />
-        </div>
+        <input
+          placeholder="Room name"
+          value={roomName}
+          onChange={(e) => setRoomName(e.target.value)}
+          className="w-full mb-4 bg-transparent border border-white/20 rounded-md px-3 py-2 text-white"
+        />
 
-        {/* Create room */}
         <button
           onClick={handleCreateRoom}
-          className="mt-4 w-full border border-fade-border rounded-md py-2 text-fade-text hover:bg-fade-border transition"
+          className="w-full mb-6 py-2 bg-white/10 hover:bg-white/20 rounded-md text-white"
         >
-          Create Room
+          Create room
         </button>
 
-        {/* Divider */}
-        <div className="flex items-center gap-3 my-6">
-          <div className="flex-1 h-px bg-fade-border" />
-          <span className="text-xs text-fade-hint">or</span>
-          <div className="flex-1 h-px bg-fade-border" />
-        </div>
-
-        {/* Join room */}
         <input
           placeholder="Room code"
           value={roomCode}
           onChange={(e) => setRoomCode(e.target.value)}
-          className="w-full bg-transparent border border-fade-border rounded-md px-3 py-2 text-fade-text placeholder-fade-hint focus:outline-none focus:border-fade-accent"
+          className="w-full mb-3 bg-transparent border border-white/20 rounded-md px-3 py-2 text-white"
         />
 
         <button
           onClick={handleJoinRoom}
-          className="mt-3 w-full border border-fade-border rounded-md py-2 text-fade-text hover:bg-fade-border transition"
+          className="w-full py-2 border border-white/20 rounded-md text-white"
         >
-          Join Room
+          Join room
         </button>
-
-        {/* Footer hint */}
-        <p className="text-xs text-fade-hint text-center mt-6">
-          rooms disappear when empty
-        </p>
       </div>
     </div>
   );
