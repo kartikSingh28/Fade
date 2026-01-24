@@ -94,7 +94,8 @@ export default function Room({ name, room }: { name: string; room: string }) {
         </div>
 
         {/* Chat UI */}
-        <Chat messages={messages} onSend={sendMessage} />
+        <Chat messages={messages} onSend={sendMessage}
+        myName={name} />
       </div>
     </div>
   );

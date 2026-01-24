@@ -1,24 +1,26 @@
-import { useState,useEffect,useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Send } from "lucide-react";
-const bottomRef = useRef<HTMLDivElement | null>(null);
-
 
 type ChatProps = {
   messages: any[];
   onSend: (text: string) => void;
+  myName: string;
 };
-export default function Chat({ messages, onSend }: ChatProps) {
+
+export default function Chat({ messages, onSend, myName }: ChatProps) {
   const [text, setText] = useState("");
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   function handleSend() {
     if (!text.trim()) return;
     onSend(text.trim());
     setText("");
   }
+  // Auto-scroll to bottom
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  useEffect(()=>{
-    bottomRef.current?.scrollIntoView({behavior:"smooth"});
-  },[messages]);
   return (
     <div className="flex flex-col h-full">
       {/* Messages */}
@@ -36,46 +38,60 @@ export default function Chat({ messages, onSend }: ChatProps) {
               </div>
             );
           }
-
           if (m.type === "MESSAGE") {
+            const isMine = m.from === myName;
             return (
-              <div key={m.id} className="text-sm leading-relaxed">
-                <span className="text-fade-accent font-medium">
-                  {m.from}
-                </span>
-                <span className="text-fade-text">
-                  : {m.text}
-                </span>
+              <div
+                key={m.id}
+                className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`
+                    max-w-[70%] px-3 py-2 rounded-lg text-sm
+                    ${isMine
+                      ? "bg-fade-border text-fade-text"
+                      : "bg-transparent text-fade-text"}
+                  `}
+                >
+                  {!isMine && (
+                    <div className="text-xs text-fade-muted mb-1">
+                      {m.from}
+                    </div>
+                  )}
+                  <div>{m.text}</div>
+                </div>
               </div>
             );
           }
-
           return null;
         })}
+
+        {/* Scroll anchor */}
         <div ref={bottomRef} />
       </div>
-      
 
-      {/* Input */}
+      {/* Input + Send */}
       <div className="mt-4 border-t border-fade-border pt-3 flex gap-2">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key ==="Enter" && handleSend()}
+          onKeyDown={(e) => e.key === "Enter" && handleSend()}
           placeholder="Type a message…"
           className="flex-1 bg-transparent border border-fade-border rounded-md px-3 py-2 text-sm text-fade-text placeholder-fade-hint focus:outline-none focus:border-fade-accent"
         />
+
         <button
-         onClick={handleSend}
-         disabled={!text.trim()}
-         className="
-         px-4 py-2 text-sm rounded-md border
-      border-fade-border text-fade-text
+          onClick={handleSend}
+          disabled={!text.trim()}
+          className="
+            p-2 rounded-md border
+      border-fade-border text-fade-accent
       hover:bg-fade-border transition
-      disabled:opacity-40 disabled:cursor-not-allowed
-         "
-         ><Send size={20} />
-</button>
+       disabled:opacity-40 disabled:cursor-not-allowed
+      "
+        >
+          <Send size={20} />
+        </button>
       </div>
     </div>
   );
