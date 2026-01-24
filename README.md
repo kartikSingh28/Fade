@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Frontend/fade-frontend/src/assets/logo.png" width="180" alt="Fade Logo" />
+  <img src="Frontend/fade-frontend/src/assets/logo2.png" width="180" alt="Fade Logo" />
 </p>
 
 <h1 align="center">Fade</h1>
