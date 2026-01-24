@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useEffect,useRef,useState} from "react";
+import { useLocation,useNavigate} from "react-router-dom";
 import Chat from "./Chat";
 
 type WsMessage =
@@ -13,6 +13,8 @@ export default function Room({ name, room }: { name: string; room: string }) {
   const ws = useRef<WebSocket | null>(null);
   const [messages, setMessages] = useState<WsMessage[]>([]);
   const location = useLocation();
+  const navigate = useNavigate();
+
 
   const [roomTitle, setRoomTitle] = useState<string | null>(
     location.state?.roomName ?? null
@@ -82,16 +84,27 @@ export default function Room({ name, room }: { name: string; room: string }) {
       <div className="w-full max-w-2xl bg-fade-surface border border-fade-border rounded-xl p-6 shadow-soft mt-6 flex flex-col h-[80vh]">
 
         {/* Header */}
-        <div className="border-b border-fade-border pb-4 mb-4">
-          <h2 className="text-lg font-semibold text-fade-text tracking-wide">
-            {roomTitle ?? "Fade Room"}
-          </h2>
+      <div className="flex items-center justify-between border-b border-fade-border pb-4 mb-4">
+  <div>
+    <h2 className="text-lg font-semibold text-fade-text tracking-wide">
+      {roomTitle ?? "Fade Room"}
+    </h2>
+    <p className="text-xs text-fade-muted mt-1">
+      Code: <span className="font-mono text-fade-accent">{room}</span>
+    </p>
+  </div>
 
-          <p className="text-xs text-fade-muted mt-1">
-            Code:{" "}
-            <span className="font-mono text-fade-accent">{room}</span>
-          </p>
-        </div>
+  <button
+    onClick={() => {
+      ws.current?.close();
+      navigate("/");
+    }}
+    className="text-xs text-fade-muted hover:text-red-400 transition"
+  >
+    Leave
+  </button>
+</div>
+
 
         {/* Chat UI */}
         <Chat messages={messages} onSend={sendMessage}
