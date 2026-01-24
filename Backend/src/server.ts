@@ -134,6 +134,8 @@ wss.on("connection", (socket) => {
       if (!name || !room) return;
 
       const id = randomUUID();
+      const createdAt = Date.now();
+
 
       await redis.set(
         `room:${room}:message:${id}`,
@@ -141,7 +143,7 @@ wss.on("connection", (socket) => {
           id,
           from: name,
           text: msg.text,
-          createdAt: Date.now(),
+          createdAt,
         }),
         "EX",
         60
@@ -151,6 +153,7 @@ wss.on("connection", (socket) => {
         id,
         from: name,
         text: msg.text,
+        createdAt,
       });
     }
   });

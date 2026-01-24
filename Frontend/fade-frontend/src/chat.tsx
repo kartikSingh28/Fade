@@ -48,6 +48,7 @@ export default function Chat({ messages, onSend, myName }: ChatProps) {
                 text={m.text}
                 from={m.from}
                 isMine={m.from === myName}
+                createdAt={m.createdAt}
               />
             );
           }
