@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState,useEffect,useRef } from "react";
 import { Send } from "lucide-react";
+const bottomRef = useRef<HTMLDivElement | null>(null);
 
 
 type ChatProps = {
@@ -14,6 +15,10 @@ export default function Chat({ messages, onSend }: ChatProps) {
     onSend(text.trim());
     setText("");
   }
+
+  useEffect(()=>{
+    bottomRef.current?.scrollIntoView({behavior:"smooth"});
+  },[messages]);
   return (
     <div className="flex flex-col h-full">
       {/* Messages */}
@@ -47,7 +52,9 @@ export default function Chat({ messages, onSend }: ChatProps) {
 
           return null;
         })}
+        <div ref={bottomRef} />
       </div>
+      
 
       {/* Input */}
       <div className="mt-4 border-t border-fade-border pt-3 flex gap-2">
