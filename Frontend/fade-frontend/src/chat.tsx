@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Send } from "lucide-react";
+
 
 type ChatProps = {
   messages: any[];
@@ -48,14 +50,25 @@ export default function Chat({ messages, onSend }: ChatProps) {
       </div>
 
       {/* Input */}
-      <div className="mt-4 border-t border-fade-border pt-3">
+      <div className="mt-4 border-t border-fade-border pt-3 flex gap-2">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          onKeyDown={(e) => e.key ==="Enter" && handleSend()}
           placeholder="Type a message…"
-          className="w-full bg-transparent border border-fade-border rounded-md px-3 py-2 text-sm text-fade-text placeholder-fade-hint focus:outline-none focus:border-fade-accent"
+          className="flex-1 bg-transparent border border-fade-border rounded-md px-3 py-2 text-sm text-fade-text placeholder-fade-hint focus:outline-none focus:border-fade-accent"
         />
+        <button
+         onClick={handleSend}
+         disabled={!text.trim()}
+         className="
+         px-4 py-2 text-sm rounded-md border
+      border-fade-border text-fade-text
+      hover:bg-fade-border transition
+      disabled:opacity-40 disabled:cursor-not-allowed
+         "
+         ><Send size={20} />
+</button>
       </div>
     </div>
   );
