@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
 type MessageProps = {
-  text: string,
-  from: string,
+  text: string;
+  from: string;
   isMine: boolean;
   createdAt: number;
 };
@@ -10,14 +10,19 @@ type MessageProps = {
 const TTL = 60_000;
 const FADE_TIME = 10_000;
 
-export default function Message({ text, from, isMine, createdAt }: MessageProps) {
+export default function Message({
+  text,
+  from,
+  isMine,
+  createdAt,
+}: MessageProps) {
   const [opacity, setOpacity] = useState(1);
 
   useEffect(() => {
     const interval = setInterval(() => {
       const age = Date.now() - createdAt;
 
-      // agr age km ho ttl-fade time se (50se kam)
+      // agr age km ho ttl-fade time se
       if (age < TTL - FADE_TIME) {
         setOpacity(1);
       } else {
@@ -27,26 +32,32 @@ export default function Message({ text, from, isMine, createdAt }: MessageProps)
     }, 500);
 
     return () => clearInterval(interval);
-  }, [createdAt]); // hr created at time pr re render hoga
+  }, [createdAt]);
 
   return (
     <div
-      className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+      className={`
+        flex ${isMine ? "justify-end" : "justify-start"}
+        px-2
+      `}
       style={{ opacity }}
     >
       <div
         className={`
-          max-w-[70%] px-3 py-2 rounded-xl text-sm leading-relaxed
+          max-w-[78%]
+          px-4 py-2.5
+          rounded-2xl
+          text-sm leading-relaxed
           transition-opacity duration-500
           ${
             isMine
-              ? "bg-white text-black rounded-br-sm shadow-sm"
-              : "bg-fade-surface text-fade-text border border-fade-border rounded-bl-sm"
+              ? "bg-white text-black rounded-br-md"
+              : "bg-fade-surface text-fade-text border border-fade-border rounded-bl-md"
           }
         `}
       >
         {!isMine && (
-          <div className="text-xs text-fade-muted mb-1">
+          <div className="text-[11px] text-fade-muted mb-0.5">
             {from}
           </div>
         )}
