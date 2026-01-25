@@ -5,7 +5,7 @@ import Particles, { initParticlesEngine } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 import type { ISourceOptions } from "@tsparticles/engine";
 
-import logo from "./assets/logo.png";
+import logo from "./assets/logo2.png";
 
 export default function Entry() {
   const [name, setName] = useState("");

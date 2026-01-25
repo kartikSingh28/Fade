@@ -25,6 +25,7 @@ export default function Room({ name, room }: { name: string; room: string }) {
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
     ws.current.send(JSON.stringify({ type: "MESSAGE", text }));
   }
+
   useEffect(() => {
     ws.current = new WebSocket("ws://localhost:8000");
 
@@ -39,13 +40,8 @@ export default function Room({ name, room }: { name: string; room: string }) {
       );
     };
 
-    ws.current.onclose = () => {
-      setConnected(false);
-    };
-
-    ws.current.onerror = () => {
-      setConnected(false);
-    };
+    ws.current.onclose = () => setConnected(false);
+    ws.current.onerror = () => setConnected(false);
 
     ws.current.onmessage = (e) => {
       try {
@@ -61,10 +57,8 @@ export default function Room({ name, room }: { name: string; room: string }) {
           return;
         }
 
-      if (msg.type === "DELETE") {
-      setMessages((prev) =>
-            prev.filter((m: any) => m.id !== msg.id)
-          );
+        if (msg.type === "DELETE") {
+          setMessages((prev) => prev.filter((m: any) => m.id !== msg.id));
           return;
         }
 
@@ -87,31 +81,34 @@ export default function Room({ name, room }: { name: string; room: string }) {
   }, [name, room]);
 
   return (
-    <div className="min-h-screen bg-fade-bg flex justify-center">
-      <div className="w-full max-w-2xl bg-fade-surface border border-fade-border rounded-xl p-6 shadow-soft mt-6 flex flex-col h-[80vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-fade-border pb-4 mb-4">
+    <div className="h-screen w-screen bg-fade-bg flex flex-col">
+
+      {/* HEADER (full width, centered content) */}
+      <div className="border-b border-fade-border">
+        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-fade-text tracking-wide">
-                {roomTitle ?? "Fade Room"}
-            </h2>
+            <h1 className="text-xl font-semibold text-fade-text">
+              {roomTitle ?? "Fade Room"}
+            </h1>
             <p className="text-xs text-fade-muted mt-1">
-                Code:{" "}
-              <span className="font-mono text-fade-accent">{room}</span>
+              Code · <span className="font-mono text-fade-accent">{room}</span>
             </p>
           </div>
+
           <button
             onClick={() => {
               ws.current?.close();
               navigate("/");
             }}
-            className="text-xs text-fade-muted hover:text-red-400 transition"
+            className="text-sm text-fade-muted hover:text-red-400 transition"
           >
             Leave
           </button>
         </div>
+      </div>
 
-        {/* Chat UI */}
+      {/* CHAT (centered column) */}
+      <div className="flex-1 overflow-hidden">
         <Chat
           messages={messages}
           onSend={sendMessage}
